@@ -1,0 +1,10 @@
+[project]
+name = "korea-forecast-bench"
+version = "0.1.0"
+description = "한국 날씨 예보를 기관별로 매일 채점하는 리더보드"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "pyarrow>=26.0.1",
+    "python-dotenv>=1.2.4",
+]
