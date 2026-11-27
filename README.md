@@ -15,7 +15,7 @@ make up     # 전체 스택 빌드·기동
 make ps     # 상태 확인 — 모두 healthy면 준비 완료
 make smoke  # 연결 점검 DAG 실행 (worker → SeaweedFS · 웨어하우스)
 make test   # 단위 테스트 (uv 필요)
-make backfill src=seoul_subway_daily from=2026-11-01 to=2026-11-27
+make backfill src=seoul_subway_daily from=2026-11-01 to=2026-11-28  # to는 마지막 실행일 + 1
 ```
 
 | 서비스 | 주소 | 로그인 |
