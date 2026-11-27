@@ -4,3 +4,4 @@ data/
 __pycache__/
 *.duckdb
 *.duckdb.wal
+airflow/logs/

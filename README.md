@@ -5,6 +5,27 @@
 - [아키텍처](docs/architecture.md) — 전체 구조, 스택 선택 이유, 데이터 소스, DAG, 버스 매트릭스
 - [로드맵](docs/roadmap.md) — 1단계 로컬 플랫폼 → 2단계 데이터 확장 → 3단계 Kubernetes
 
+## 로컬 실행
+
+사전 준비: [OrbStack](https://orbstack.dev) (`brew install --cask orbstack` 후 앱을 한 번 실행)
+
+```bash
+make init   # .env 생성 (비밀값 자동 생성, 외부 API 키는 직접 채운다)
+make up     # 전체 스택 빌드·기동
+make ps     # 상태 확인 — 모두 healthy면 준비 완료
+make smoke  # 연결 점검 DAG 실행 (worker → SeaweedFS · 웨어하우스)
+```
+
+| 서비스 | 주소 | 로그인 |
+|---|---|---|
+| Airflow | http://localhost:8080 | `.env`의 `AIRFLOW_ADMIN_USER` / `AIRFLOW_ADMIN_PASSWORD` |
+| Flower (Celery) | http://localhost:5555 | — |
+| Metabase | http://localhost:3000 | 첫 접속 시 계정 생성 |
+| SeaweedFS S3 | http://localhost:8333 | `.env`의 `S3_ACCESS_KEY` / `S3_SECRET_KEY` |
+| 웨어하우스 | `localhost:5433` / DB `warehouse` | `.env`의 `WAREHOUSE_USER` / `WAREHOUSE_PASSWORD` |
+
+Metabase에서 웨어하우스를 연결할 때는 호스트 `postgres-warehouse`, 포트 `5432`, 읽기 전용 계정 `bi_reader`를 쓴다.
+
 ## 데이터 출처
 
 | 소스 | 제공처 | 용도 | 라이선스 |

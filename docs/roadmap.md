@@ -15,7 +15,7 @@ worker는 상시 띄워 둔다 (유휴 worker는 수백 MB 수준).
 
 | 주차 | 할 일 | 완료 기준 |
 |---|---|---|
-| 1 | OrbStack 설치, `docker-compose.yml` (Airflow 3 · Celery · Redis · Postgres ×2 · SeaweedFS · Metabase) | `make up` 한 번으로 모든 컨테이너 healthy, Airflow UI·Flower·Metabase 접속 |
+| 1 ✅ | OrbStack 설치, `docker-compose.yml` (Airflow 3 · Celery · Redis · Postgres ×2 · SeaweedFS · Metabase) | `make up` 한 번으로 모든 컨테이너 healthy, Airflow UI·Flower·Metabase 접속 |
 | 2 | 수집기: ASOS · 따릉이 이용 건수 · 지하철 일별 승하차. 랜딩 존 → raw 적재, `daily_batch` DAG | 지난 30일 backfill이 중복 없이 성공 |
 | 3 | dbt staging · core: `dim_date`(공휴일), `dim_dong`(PostGIS), `fct_weather_hourly`, `fct_bike_rides_daily`, `fct_subway_ridership` + 테스트 | `dbt build` 통과, 테스트 실패 시 marts 미갱신 |
 | 4 | `mart_weather_impact`(평소 대비 증감), Metabase 대시보드, `transform` DAG(Asset 트리거) | "비 온 날 따릉이 −X%, 지하철 +Y%"가 대시보드에 보인다 |

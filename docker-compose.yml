@@ -1,0 +1,276 @@
+# seoul-weather-life 로컬 데이터 플랫폼
+# Airflow 부분은 공식 docker-compose(3.4.0)를 바탕으로 했다:
+# https://airflow.apache.org/docs/apache-airflow/3.4.0/docker-compose.yaml
+# 구조 설명은 docs/architecture.md 참고.
+
+x-airflow-common: &airflow-common
+  build: ./airflow
+  image: swl-airflow:3.4.0
+  env_file: .env
+  environment: &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg://${META_DB_USER}:${META_DB_PASSWORD}@postgres-meta/airflow
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg://${META_DB_USER}:${META_DB_PASSWORD}@postgres-meta/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__DEFAULT_TIMEZONE: Asia/Seoul
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET}
+    AIRFLOW__API_AUTH__JWT_ISSUER: airflow
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    # 데이터 플랫폼 접속 정보: Airflow Connection을 환경변수로 주입한다 (코드에 비밀값을 두지 않는다)
+    AIRFLOW_CONN_WAREHOUSE: postgresql://${WAREHOUSE_USER}:${WAREHOUSE_PASSWORD}@postgres-warehouse:5432/warehouse
+    AIRFLOW_CONN_LANDING: >-
+      {"conn_type": "aws", "login": "${S3_ACCESS_KEY}", "password": "${S3_SECRET_KEY}",
+      "extra": {"endpoint_url": "http://seaweedfs:8333", "region_name": "us-east-1"}}
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/config:/opt/airflow/config
+    - ./airflow/plugins:/opt/airflow/plugins
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on: &airflow-common-depends-on
+    redis:
+      condition: service_healthy
+    postgres-meta:
+      condition: service_healthy
+
+services:
+  # ── Airflow 메타 DB (+ Metabase 앱 DB) ─────────────────────────
+  postgres-meta:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: ${META_DB_USER}
+      POSTGRES_PASSWORD: ${META_DB_PASSWORD}
+      POSTGRES_DB: airflow
+      METABASE_DB_PASSWORD: ${METABASE_DB_PASSWORD}
+    volumes:
+      - postgres-meta:/var/lib/postgresql/data
+      - ./docker/postgres-meta/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${META_DB_USER}", "-d", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  # ── Celery 브로커 ──────────────────────────────────────────────
+  redis:
+    # 공식 compose와 같은 이유로 7.2에 고정 (이후 버전 라이선스 변경)
+    image: redis:7.2-bookworm
+    expose:
+      - 6379
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 30s
+      retries: 50
+      start_period: 30s
+    restart: always
+
+  # ── Airflow 컨트롤 플레인 ──────────────────────────────────────
+  airflow-apiserver:
+    <<: *airflow-common
+    command: api-server
+    ports:
+      - "127.0.0.1:8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type SchedulerJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: dag-processor
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    healthcheck:
+      test: ["CMD-SHELL", 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  # ── Celery 실행 계층 ───────────────────────────────────────────
+  airflow-worker:
+    <<: *airflow-common
+    # default(수집·적재)와 dbt(변환) 큐를 모두 처리한다. 3단계에서 큐별로 나눈다.
+    command: celery worker --queues default,dbt
+    healthcheck:
+      test: ["CMD-SHELL", 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    environment:
+      <<: *airflow-common-env
+      # Celery worker의 warm shutdown 처리 (공식 compose와 동일)
+      DUMB_INIT_SETSID: "0"
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-apiserver:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+
+  flower:
+    <<: *airflow-common
+    command: celery flower
+    ports:
+      - "127.0.0.1:5555:5555"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: always
+    depends_on:
+      <<: *airflow-common-depends-on
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        mkdir -p /opt/airflow/{logs,dags,plugins,config}
+        /entrypoint airflow version
+        /entrypoint airflow config list >/dev/null
+        chown -R "${AIRFLOW_UID:-50000}:0" /opt/airflow/{logs,dags,plugins,config}
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_MIGRATE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_ADMIN_USER}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_ADMIN_PASSWORD}
+    user: "0:0"
+
+  # ── 데이터 플랫폼 ──────────────────────────────────────────────
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.55
+    entrypoint: ["/bin/sh", "/etc/seaweedfs/entrypoint.sh"]
+    environment:
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+    ports:
+      - "127.0.0.1:8333:8333"   # S3 API
+      - "127.0.0.1:9333:9333"   # master UI
+    volumes:
+      - seaweedfs:/data
+      - ./docker/seaweedfs/entrypoint.sh:/etc/seaweedfs/entrypoint.sh:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9333/cluster/status"]
+      interval: 10s
+      retries: 10
+      start_period: 10s
+    restart: always
+
+  seaweedfs-init:
+    image: chrislusf/seaweedfs:4.55
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if echo "s3.bucket.list" | weed shell -master=seaweedfs:9333 | grep -qw landing; then
+          echo "bucket 'landing' already exists"
+        else
+          echo "s3.bucket.create -name landing" | weed shell -master=seaweedfs:9333
+        fi
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+
+  postgres-warehouse:
+    build: ./docker/warehouse
+    image: swl-warehouse:17-postgis
+    environment:
+      POSTGRES_USER: ${WAREHOUSE_USER}
+      POSTGRES_PASSWORD: ${WAREHOUSE_PASSWORD}
+      POSTGRES_DB: warehouse
+      BI_READER_PASSWORD: ${BI_READER_PASSWORD}
+    ports:
+      - "127.0.0.1:5433:5432"   # 로컬 psql·DBeaver 접속용
+    volumes:
+      - postgres-warehouse:/var/lib/postgresql/data
+      - ./docker/warehouse/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${WAREHOUSE_USER}", "-d", "warehouse"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+    restart: always
+
+  metabase:
+    image: metabase/metabase:v0.65.7.3
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_HOST: postgres-meta
+      MB_DB_PORT: 5432
+      MB_DB_DBNAME: metabase
+      MB_DB_USER: metabase
+      MB_DB_PASS: ${METABASE_DB_PASSWORD}
+      JAVA_TIMEZONE: Asia/Seoul
+      JAVA_OPTS: -Xmx1g
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: always
+    depends_on:
+      postgres-meta:
+        condition: service_healthy
+
+volumes:
+  postgres-meta:
+  postgres-warehouse:
+  seaweedfs:

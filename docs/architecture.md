@@ -56,16 +56,21 @@ flowchart TB
 | airflow-api-server | 웹 UI, worker 상태 수신(Task Execution API) | MWAA · Astronomer |
 | airflow-scheduler | 언제 무엇을 실행할지 판단, 큐에 투입 | 〃 |
 | airflow-dag-processor | `dags/` 해석 | 〃 |
-| airflow-worker | Celery worker. 실제 코드 실행 | 〃 |
-| airflow-init | DB 마이그레이션·계정 생성 (1회 실행 후 종료) | — |
-| postgres-meta | Airflow 메타 DB | RDS |
+| airflow-triggerer | deferrable 태스크(센서 대기 등)를 비동기로 처리 | 〃 |
+| airflow-worker | Celery worker. 실제 코드 실행 (`default`·`dbt` 큐) | 〃 |
+| airflow-init | DB 마이그레이션·관리자 계정 생성 (1회 실행 후 종료) | — |
+| postgres-meta | Airflow 메타 DB + Metabase 앱 DB | RDS |
 | redis | Celery 브로커 | ElastiCache |
 | flower | Celery 모니터링 | — |
-| seaweedfs | S3 호환 오브젝트 스토리지 (랜딩 존) | S3 · GCS |
-| postgres-warehouse | 웨어하우스 (PostGIS 확장) | Redshift · Snowflake · BigQuery |
+| seaweedfs | S3 호환 오브젝트 스토리지 (랜딩 존, 단일 노드) | S3 · GCS |
+| seaweedfs-init | `landing` 버킷 생성 (1회 실행 후 종료) | — |
+| postgres-warehouse | 웨어하우스 (PostGIS 확장, `raw`·`staging`·`core`·`marts` 스키마, BI 읽기 전용 계정 `bi_reader`) | Redshift · Snowflake · BigQuery |
 | metabase | BI | Tableau · Looker · Superset |
 
-예상 메모리 5~6GB. 개발 머신은 M3 Pro 18GB.
+상시 실행 컨테이너 11개 + 초기화용 2개. 개발 머신은 M3 Pro 18GB.
+
+- 웨어하우스 이미지는 `postgis/postgis`(amd64 전용) 대신 공식 `postgres:17`에 PGDG PostGIS 패키지를 얹어 Apple Silicon에서 네이티브로 돈다.
+- 모든 포트는 `127.0.0.1`에만 열어 같은 네트워크의 다른 기기에서 접근할 수 없다.
 
 ## 3. 스택 선택 이유
 
