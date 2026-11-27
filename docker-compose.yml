@@ -26,11 +26,16 @@ x-airflow-common: &airflow-common
     AIRFLOW_CONN_LANDING: >-
       {"conn_type": "aws", "login": "${S3_ACCESS_KEY}", "password": "${S3_SECRET_KEY}",
       "extra": {"endpoint_url": "http://seaweedfs:8333", "region_name": "us-east-1"}}
+    # 수집 패키지(src/swl)와 소스 정의를 마운트해 DAG과 worker가 import한다
+    PYTHONPATH: /opt/airflow/src
+    SWL_SOURCES: /opt/airflow/sources.yml
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
     - ./airflow/config:/opt/airflow/config
     - ./airflow/plugins:/opt/airflow/plugins
+    - ./src:/opt/airflow/src:ro
+    - ./sources.yml:/opt/airflow/sources.yml:ro
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on: &airflow-common-depends-on
     redis:

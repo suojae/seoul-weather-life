@@ -5,6 +5,14 @@ description = "날씨가 서울의 이동·인구에 주는 영향을 보여 주
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
-    "pyarrow>=26.0.1",
-    "python-dotenv>=1.2.4",
+    "pyyaml>=6.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

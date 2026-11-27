@@ -112,6 +112,31 @@ flowchart TB
 | `transform` | raw Asset 갱신 시 | dbt source freshness → build(staging → core → marts) → 알림 |
 
 - 소스가 늘어나도 DAG을 손으로 쓰지 않는다. `sources.yml`(이름·주기·클라이언트·파티션 키·지연)에서 DAG을 생성하는 **DAG 팩토리**로 만든다.
+
+### 일 배치 수집 (구현됨)
+
+`airflow/dags/ingest_factory.py`가 `sources.yml`의 소스마다 `ingest__<소스>` DAG을 만든다. 소스별로 DAG을 나눠 backfill·재실행·일시 중지를 소스 단위로 할 수 있다. 위 표의 `daily_batch`는 이 DAG들의 묶음이다.
+
+```mermaid
+flowchart LR
+    API["소스 API"] -->|extract| L[("SeaweedFS<br/>landing/소스/dt=날짜/page-NNNNN.json")]
+    L -->|load| R[("웨어하우스<br/>raw.소스 (dt, record jsonb)")]
+    R -.->|Asset 갱신| T["transform (예정)"]
+```
+
+- **수집 대상 날짜** = 실행 시각(KST)의 날짜 − `lag_days`. 공개 전이면 `DataNotReady`로 실패시키고 1시간 뒤 재시도한다(최대 3회). 첫 페이지를 받기 전에는 랜딩 존을 지우지 않아 이전 원본이 남는다.
+- **extract**: 페이지별 원본을 그대로 저장한다. 같은 dt를 다시 받으면 프리픽스를 비우고 새로 쓴다.
+- **load**: 테이블별 advisory lock → `DELETE WHERE dt` → `INSERT`를 한 트랜잭션으로 한다. 레코드는 JSONB 그대로 두고 타입·컬럼 정리는 dbt staging에서 한다.
+- 로직은 `src/swl`(Airflow 비의존)에 있고 pytest로 검증한다. DAG은 Airflow Connection(`landing`, `warehouse`)만 넘긴다.
+
+| 소스 | API 서비스 | 공개 지연 | 하루 행 수 |
+|---|---|---|---|
+| `seoul_subway_daily` | `CardSubwayStatsNew` | 3일 | 약 600 |
+| `seoul_bike_rent_daily` | `tbCycleRentUseDayInfo` | 1일 | 4~6만 |
+
+공개 지연은 2026-11-27에 API를 직접 호출해 확인했다.
+
+**backfill 주의**: `airflow backfill create`의 `--from-date`·`--to-date`는 UTC로 해석된다. 스케줄이 KST 07:00(UTC 전날 22:00)이라, KST 기준 D일 실행까지 포함하려면 `--to-date`를 D로 준다(D−1 22:00 UTC가 포함된다). 범위를 넉넉히 잡아도 멱등이라 안전하다.
 - worker 큐는 `default`(API 호출·적재)와 `dbt`(변환)로 나눠 무거운 변환이 수집을 막지 않게 한다.
 
 ## 6. 웨어하우스 레이어

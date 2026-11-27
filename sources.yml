@@ -1,0 +1,27 @@
+# 수집 소스 정의. airflow/dags/ingest_factory.py가 소스마다 `ingest__<이름>` DAG을 만든다.
+#
+#   client       : src/swl/clients 의 클라이언트 이름
+#   service      : API 서비스명
+#   path_params  : 요청 경로에 붙는 파라미터. {date}는 수집 대상 날짜 (strftime 형식 지정 가능)
+#   lag_days     : 공개 지연. 실행일 기준 며칠 전 날짜를 수집 대상으로 삼는다
+#   schedule     : cron (Asia/Seoul)
+#   raw_table    : 적재할 웨어하우스 테이블 (raw 스키마)
+
+sources:
+  seoul_subway_daily:
+    description: 서울 지하철 호선별 역별 일별 승하차 인원
+    client: seoul_openapi
+    service: CardSubwayStatsNew
+    path_params: ["{date:%Y%m%d}"]
+    lag_days: 3        # 2026-11-27 확인: 11-24자까지 공개 (REG_YMD = 사용일 + 3일)
+    schedule: "0 7 * * *"
+    raw_table: raw.seoul_subway_daily
+
+  seoul_bike_rent_daily:
+    description: 서울 공공자전거(따릉이) 대여소별 일별 이용 정보
+    client: seoul_openapi
+    service: tbCycleRentUseDayInfo
+    path_params: ["{date:%Y%m%d}"]
+    lag_days: 1        # 2026-11-27 확인: 11-26자까지 공개. 하루 4~6만 행
+    schedule: "0 7 * * *"
+    raw_table: raw.seoul_bike_rent_daily
