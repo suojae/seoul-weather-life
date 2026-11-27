@@ -6,6 +6,7 @@
 #   lag_days     : 공개 지연. 실행일 기준 며칠 전 날짜를 수집 대상으로 삼는다
 #   schedule     : cron (Asia/Seoul)
 #   raw_table    : 적재할 웨어하우스 테이블 (raw 스키마)
+#   params       : 클라이언트별 추가 설정
 
 sources:
   seoul_subway_daily:
@@ -25,3 +26,13 @@ sources:
     lag_days: 1        # 2026-11-27 확인: 11-26자까지 공개. 하루 4~6만 행
     schedule: "0 7 * * *"
     raw_table: raw.seoul_bike_rent_daily
+
+  kma_asos_hourly:
+    description: 기상청 종관기상관측(ASOS) 시간자료 — 기온·강수·습도·풍속 등
+    client: kma_asos_hourly
+    service: getWthrDataList
+    params:
+      stations: [108]  # 서울. 지점 하나당 요청 1회, 하루 24행
+    lag_days: 1        # 2026-11-27 확인: 전날 자료까지 제공 (당일 요청 시 resultCode 99)
+    schedule: "0 7 * * *"
+    raw_table: raw.kma_asos_hourly

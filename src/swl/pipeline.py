@@ -14,13 +14,13 @@ from dataclasses import dataclass
 from datetime import date
 
 from swl import landing, loaders
-from swl.clients import SeoulOpenApiClient
+from swl.clients import AsosHourlyClient, Client, SeoulOpenApiClient
 from swl.sources import Source
 
 
 @dataclass(frozen=True)
 class ClientSpec:
-    make: Callable[[], object]  # .fetch(service, path_params) -> Iterator[Page]
+    make: Callable[[], Client]
     parse_rows: Callable[[bytes], list[dict]]
 
 
@@ -29,12 +29,16 @@ CLIENTS: dict[str, ClientSpec] = {
         make=lambda: SeoulOpenApiClient(os.environ.get("SEOUL_OPENDATA_KEY", "")),
         parse_rows=SeoulOpenApiClient.rows_from_body,
     ),
+    "kma_asos_hourly": ClientSpec(
+        make=lambda: AsosHourlyClient(os.environ.get("KMA_SERVICE_KEY", "")),
+        parse_rows=AsosHourlyClient.rows_from_body,
+    ),
 }
 
 
 def extract(source: Source, target: date, s3, client=None) -> list[str]:
     client = client or CLIENTS[source.client].make()
-    pages = client.fetch(source.service, source.render_path_params(target))
+    pages = client.fetch_source(source, target)
     return landing.write_partition(s3, source.name, target, pages)
 
 

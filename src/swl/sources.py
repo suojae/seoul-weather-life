@@ -23,6 +23,7 @@ class Source:
     schedule: str
     raw_table: str
     path_params: tuple[str, ...] = field(default_factory=tuple)
+    params: dict = field(default_factory=dict)  # 클라이언트별 추가 설정 (예: ASOS stations)
 
     def __post_init__(self) -> None:
         if not _NAME.match(self.name):
