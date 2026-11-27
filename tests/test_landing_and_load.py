@@ -52,8 +52,8 @@ class FakeClient:
     def __init__(self, n_pages, rows_per_page=2, fail=None):
         self.n_pages, self.rows_per_page, self.fail = n_pages, rows_per_page, fail
 
-    def fetch(self, service, path_params):
-        assert path_params == ["20261120"]
+    def fetch_source(self, source, target):
+        assert source.render_path_params(target) == ["20261120"]
         if self.fail:
             raise self.fail
         for n in range(1, self.n_pages + 1):

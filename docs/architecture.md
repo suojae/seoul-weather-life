@@ -133,6 +133,9 @@ flowchart LR
 |---|---|---|---|
 | `seoul_subway_daily` | `CardSubwayStatsNew` | 3일 | 약 600 |
 | `seoul_bike_rent_daily` | `tbCycleRentUseDayInfo` | 1일 | 4~6만 |
+| `kma_asos_hourly` | ASOS 시간자료 `getWthrDataList` (공공데이터포털) | 1일 | 관측소당 24 |
+
+ASOS는 요청 한 번에 관측소 하나만 받으므로 `params.stations`의 관측소마다 요청한다. 현재는 서울(108)만 받는다.
 
 공개 지연은 2026-11-27에 API를 직접 호출해 확인했다.
 
