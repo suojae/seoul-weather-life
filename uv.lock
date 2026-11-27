@@ -71,7 +71,7 @@ wheels = [
 ]
 
 [[package]]
-name = "korea-forecast-bench"
+name = "seoul-weather-life"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

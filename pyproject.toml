@@ -1,7 +1,7 @@
 [project]
-name = "korea-forecast-bench"
+name = "seoul-weather-life"
 version = "0.1.0"
-description = "한국 날씨 예보를 기관별로 매일 채점하는 리더보드"
+description = "날씨가 서울의 이동·인구에 주는 영향을 보여 주는 데이터 마트"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
