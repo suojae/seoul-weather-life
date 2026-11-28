@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
-from dataclasses import dataclass
+from datetime import date
 
 import httpx
 
+from swl.clients.base import Page
 from swl.errors import DataNotReady, SourceError
+from swl.sources import Source
 
 BASE_URL = "http://openapi.seoul.go.kr:8088"
 PAGE_SIZE = 1000
@@ -26,16 +28,6 @@ _NO_DATA = "INFO-200"
 _OK = "INFO-000"
 
 
-@dataclass
-class Page:
-    """API 응답 한 페이지. body는 랜딩 존에 그대로 저장하고, rows는 적재에 쓴다."""
-
-    number: int
-    body: bytes
-    rows: list[dict]
-    total: int
-
-
 class SeoulOpenApiClient:
     def __init__(self, key: str, http: httpx.Client | None = None, page_size: int = PAGE_SIZE):
         if not key:
@@ -43,6 +35,9 @@ class SeoulOpenApiClient:
         self.key = key
         self.http = http or httpx.Client(timeout=30)
         self.page_size = SAMPLE_MAX_ROWS if key == SAMPLE_KEY else page_size
+
+    def fetch_source(self, source: Source, target: date) -> Iterator[Page]:
+        return self.fetch(source.service, source.render_path_params(target))
 
     def fetch(self, service: str, path_params: list[str]) -> Iterator[Page]:
         start, number, total = 1, 1, None

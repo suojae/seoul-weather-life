@@ -133,10 +133,13 @@ flowchart LR
 |---|---|---|---|
 | `seoul_subway_daily` | `CardSubwayStatsNew` | 3일 | 약 600 |
 | `seoul_bike_rent_daily` | `tbCycleRentUseDayInfo` | 1일 | 4~6만 |
+| `kma_asos_hourly` | ASOS 시간자료 `getWthrDataList` (공공데이터포털) | 1일 | 관측소당 24 |
+
+ASOS는 요청 한 번에 관측소 하나만 받으므로 `params.stations`의 관측소마다 요청한다. 현재는 서울(108)만 받는다.
 
 공개 지연은 2026-11-27에 API를 직접 호출해 확인했다.
 
-**backfill 주의**: `airflow backfill create`의 `--from-date`·`--to-date`는 UTC로 해석된다. 스케줄이 KST 07:00(UTC 전날 22:00)이라, KST 기준 D일 실행까지 포함하려면 `--to-date`를 D로 준다(D−1 22:00 UTC가 포함된다). 범위를 넉넉히 잡아도 멱등이라 안전하다.
+**backfill 주의**: `airflow backfill create`의 `--from-date`·`--to-date`는 DAG 시간대(KST)의 **자정**으로 해석된다. 스케줄이 매일 07:00이라 `--to-date` 당일 07:00 실행은 범위에 들어가지 않는다. KST D일 실행까지 포함하려면 `--to-date`를 D+1로 준다. 이미 있는 실행은 건너뛰고(기본 `reprocess_behavior`), 범위를 넉넉히 잡아도 멱등이라 안전하다. 실제로 만들어질 실행은 `--dry-run`으로 먼저 확인한다.
 - worker 큐는 `default`(API 호출·적재)와 `dbt`(변환)로 나눠 무거운 변환이 수집을 막지 않게 한다.
 
 ## 6. 웨어하우스 레이어
