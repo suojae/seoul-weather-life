@@ -109,7 +109,7 @@ flowchart TB
 | `realtime_poll` | 10분마다 | 현재 상태 스냅샷을 append. 지나간 시점은 다시 받을 수 없다 |
 | `daily_batch` | 매일 | 소스별 공개 지연만큼 이전 날짜를 받아 `dt` 파티션 단위로 delete + insert (멱등) |
 | `reference_sync` | 매월 | 기준 데이터 변경분을 SCD Type 2로 이력 관리 |
-| `transform` | raw Asset 갱신 시 | dbt source freshness → build(staging → core → marts) → 알림 |
+| `transform` | raw Asset 갱신 시 | dbt source freshness → Cosmos로 모델별 run·test (staging → core → marts) |
 
 - 소스가 늘어나도 DAG을 손으로 쓰지 않는다. `sources.yml`(이름·주기·클라이언트·파티션 키·지연)에서 DAG을 생성하는 **DAG 팩토리**로 만든다.
 
@@ -150,6 +150,21 @@ ASOS는 요청 한 번에 관측소 하나만 받으므로 `params.stations`의 
 | `staging` | 타입·단위·시간대(KST) 정리, 컬럼명 통일 | view |
 | `core` | 공통 차원 + 주제별 팩트 | table / incremental |
 | `marts` | 분석·대시보드용 최종 마트 | table |
+
+### dbt 프로젝트 (`dbt/`)
+
+- dbt Core 1.12 + dbt-postgres. Airflow와 의존성이 겹치지 않게 이미지 안의 별도 가상환경(`DBT_EXECUTABLE`)에 설치한다.
+- 타깃: `prod`는 `staging`·`core`·`marts` 스키마에 그대로 쓰고(Airflow만 사용), `dev`는 `dev_staging`처럼 접두사를 붙여 운영 테이블을 건드리지 않는다 (`macros/generate_schema_name.sql`). 접속 정보는 환경변수에서 읽는다.
+- `make dbt-dev`로 worker 컨테이너 안에서 dev 타깃을 빌드·테스트한다.
+- **`transform` DAG**: `sources.yml`의 raw Asset이 모두 갱신되면 실행된다. `dbt source freshness`(36시간 경고, 72시간 오류) 뒤에 Cosmos가 모델마다 `run`·`test` 태스크를 만들어 `dbt` 큐에서 돌린다. 테스트가 실패하면 하위 모델은 실행되지 않는다.
+
+| staging 모델 | 그레인 | 주요 정리 |
+|---|---|---|
+| `stg_kma__asos_hourly` | 관측소 × 정시 | 빈 문자열 → null, 강수량 빈 값 → 0 (강수 없음) |
+| `stg_seoul__subway_daily` | 사용일 × 호선 × 역명 | 역 ID가 없어 역명으로 식별 |
+| `stg_seoul__bike_rent_daily` | 대여일 × rnum | 같은 대여소·이용권·성별·연령 조합이 여러 행으로 와서 원본 행 단위 유지. 성별 `M/m/F/f/빈 값` → `M/F/null` |
+
+데이터 테스트: 키 조합 유일성(`unique_combination`), 물리적 범위(`value_between`: 기온 −40~45℃, 습도 0~100% 등), not_null, 허용값.
 
 ### 버스 매트릭스
 

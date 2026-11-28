@@ -34,6 +34,12 @@ class Source:
         if self.lag_days < 0:
             raise ValueError(f"{self.name}: lag_days must be >= 0")
 
+    @property
+    def raw_asset_uri(self) -> str:
+        """raw 테이블을 가리키는 Airflow Asset URI. 수집 DAG(outlet)과 변환 DAG(schedule)이 공유한다."""
+        schema, table = self.raw_table.split(".")
+        return f"postgres://postgres-warehouse:5432/warehouse/{schema}/{table}"
+
     def target_date(self, run_date: date) -> date:
         """실행일에서 공개 지연만큼 뺀 수집 대상 날짜."""
         return run_date - timedelta(days=self.lag_days)

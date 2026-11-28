@@ -1,0 +1,83 @@
+version: 2
+
+models:
+  - name: stg_kma__asos_hourly
+    description: 기상청 ASOS 시간자료. 관측소 × 정시 한 행. 시각은 KST.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [station_id, observed_at]
+    columns:
+      - name: station_id
+        data_tests: [not_null]
+      - name: observed_at
+        description: 관측 시각 (KST, 정시)
+        data_tests: [not_null]
+      - name: temperature_c
+        description: 기온 (℃). 결측은 null
+        data_tests:
+          - value_between:
+              arguments: {min_value: -40, max_value: 45}
+      - name: precipitation_mm
+        description: 시간 강수량 (mm). 원자료가 비어 있으면 강수 없음으로 보고 0
+        data_tests:
+          - not_null
+          - value_between:
+              arguments: {min_value: 0, max_value: 300}
+      - name: humidity_pct
+        data_tests:
+          - value_between:
+              arguments: {min_value: 0, max_value: 100}
+      - name: wind_speed_ms
+        data_tests:
+          - value_between:
+              arguments: {min_value: 0, max_value: 60}
+
+  - name: stg_seoul__subway_daily
+    description: 서울 지하철 호선별 역별 일별 승하차. 사용일 × 호선 × 역명 한 행.
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [use_date, line_name, station_name]
+    columns:
+      - name: use_date
+        data_tests: [not_null]
+      - name: line_name
+        data_tests: [not_null]
+      - name: station_name
+        data_tests: [not_null]
+      - name: boardings
+        data_tests:
+          - not_null
+          - value_between:
+              arguments: {min_value: 0, max_value: 1000000}
+      - name: alightings
+        data_tests:
+          - not_null
+          - value_between:
+              arguments: {min_value: 0, max_value: 1000000}
+
+  - name: stg_seoul__bike_rent_daily
+    description: >
+      따릉이 대여소별 일별 이용 정보. API 응답 한 행 = 한 행.
+      같은 대여소·이용권·성별·연령 조합이 여러 행으로 나뉘어 오므로 그레인은 (rent_date, rnum).
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [rent_date, rnum]
+    columns:
+      - name: rent_date
+        data_tests: [not_null]
+      - name: station_id
+        data_tests: [not_null]
+      - name: gender
+        description: M / F. 원자료의 소문자는 대문자로, 빈 값은 null
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['M', 'F']
+      - name: rides
+        data_tests:
+          - not_null
+          - value_between:
+              arguments: {min_value: 0, max_value: 10000}

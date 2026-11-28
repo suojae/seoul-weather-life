@@ -29,6 +29,10 @@ x-airflow-common: &airflow-common
     # 수집 패키지(src/swl)와 소스 정의를 마운트해 DAG과 worker가 import한다
     PYTHONPATH: /opt/airflow/src
     SWL_SOURCES: /opt/airflow/sources.yml
+    # dbt: 컨테이너 안에서는 웨어하우스 서비스 이름으로 접속한다 (로컬은 localhost:5433)
+    DBT_HOST: postgres-warehouse
+    DBT_PORT: '5432'
+    DBT_EXECUTABLE: /home/airflow/dbt-venv/bin/dbt
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
@@ -36,6 +40,7 @@ x-airflow-common: &airflow-common
     - ./airflow/plugins:/opt/airflow/plugins
     - ./src:/opt/airflow/src:ro
     - ./sources.yml:/opt/airflow/sources.yml:ro
+    - ./dbt:/opt/airflow/dbt
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on: &airflow-common-depends-on
     redis:
