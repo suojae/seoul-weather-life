@@ -32,11 +32,7 @@ def _run_date() -> date:
 
 
 def _raw_asset(source: Source) -> Asset:
-    schema, table = source.raw_table.split(".")
-    return Asset(
-        name=source.raw_table,
-        uri=f"postgres://postgres-warehouse:5432/warehouse/{schema}/{table}",
-    )
+    return Asset(name=source.raw_table, uri=source.raw_asset_uri)
 
 
 def build_dag(source: Source):

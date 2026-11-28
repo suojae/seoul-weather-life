@@ -1,0 +1,22 @@
+name: seoul_weather_life
+version: "1.0.0"
+config-version: 2
+profile: seoul_weather_life
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  seoul_weather_life:
+    staging:
+      +schema: staging
+      +materialized: view
+    core:
+      +schema: core
+      +materialized: table
+    marts:
+      +schema: marts
+      +materialized: table

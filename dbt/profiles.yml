@@ -1,0 +1,24 @@
+# 접속 정보는 환경변수에서 읽는다 (.env). 비밀값을 파일에 두지 않는다.
+#   컨테이너 안: DBT_HOST=postgres-warehouse, DBT_PORT=5432 (docker-compose.yml)
+#   로컬:       기본값 localhost:5433
+seoul_weather_life:
+  target: dev
+  outputs:
+    dev:   # 스키마 앞에 dev_가 붙는다 (dev_staging, dev_core ...)
+      type: postgres
+      host: "{{ env_var('DBT_HOST', 'localhost') }}"
+      port: "{{ env_var('DBT_PORT', '5433') | int }}"
+      user: "{{ env_var('WAREHOUSE_USER') }}"
+      password: "{{ env_var('WAREHOUSE_PASSWORD') }}"
+      dbname: warehouse
+      schema: dev
+      threads: 4
+    prod:  # staging, core, marts 스키마에 그대로 쓴다. Airflow만 쓴다
+      type: postgres
+      host: "{{ env_var('DBT_HOST', 'localhost') }}"
+      port: "{{ env_var('DBT_PORT', '5433') | int }}"
+      user: "{{ env_var('WAREHOUSE_USER') }}"
+      password: "{{ env_var('WAREHOUSE_PASSWORD') }}"
+      dbname: warehouse
+      schema: public
+      threads: 4
